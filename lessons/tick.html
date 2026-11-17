@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lesson 1: Ticks and ATB bars</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --ink:#1c1c1c; --muted:#666; --rule:#ddd; --accent:#2a5db0; --ready:#c0392b; --bg:#fffdf8; }
+  body { font:18px/1.6 Georgia, "Times New Roman", serif; color:var(--ink); background:var(--bg);
+         max-width:44rem; margin:3rem auto; padding:0 1.2rem; }
+  h1 { font-size:2rem; line-height:1.2; margin-bottom:.2rem; }
+  h2 { font-size:1.25rem; margin-top:2.4rem; border-bottom:1px solid var(--rule); padding-bottom:.2rem; }
+  .sub { color:var(--muted); font-style:italic; margin-top:0; }
+  code, pre { font-family:Menlo, Consolas, monospace; font-size:.85rem; }
+  pre { background:#f4f1ea; padding:1rem; overflow-x:auto; border-left:3px solid var(--accent); line-height:1.45; }
+  .note { color:var(--muted); font-size:.9rem; }
+  .win { background:#eef4ff; border-left:3px solid var(--accent); padding:.6rem 1rem; }
+  .demo { border:1px solid var(--rule); padding:1rem; background:#fff; }
+  .row { display:grid; grid-template-columns:5rem 1fr 6rem; gap:.8rem; align-items:center; margin:.7rem 0; font-size:.9rem; }
+  .bar { height:18px; background:#eee; border:1px solid #bbb; position:relative; }
+  .fill { height:100%; width:0; background:var(--accent); }
+  .fill.ready { background:var(--ready); }
+  .ctl { display:flex; gap:1rem; flex-wrap:wrap; align-items:center; font-size:.85rem; margin-top:.5rem; }
+  .ctl label { display:flex; gap:.3rem; align-items:center; }
+  button { font:inherit; font-size:.85rem; padding:.3rem .8rem; cursor:pointer; border:1px solid #999; background:#fff; }
+  button:hover { background:#f0f0f0; }
+  .q { margin:1.2rem 0; }
+  .q button { display:block; width:100%; text-align:left; margin:.3rem 0; }
+  .q button.right { background:#e3f4e3; border-color:#3a8a3a; }
+  .q button.wrong { background:#fbe5e5; border-color:#b33; }
+  .fb { font-size:.9rem; color:var(--muted); min-height:1.2em; }
+  a { color:var(--accent); }
+  @media (max-width:520px) { .row { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Ticks and ATB bars</h1>
+<p class="sub">Lesson 1 &middot; Mission: build your own turn-based battle game in C, running in the terminal</p>
+
+<p class="win"><strong>Your win for this lesson:</strong> by the end you can read a small C program and predict on which tick each fighter becomes ready to act.</p>
+
+<h2>1. The idea in three sentences</h2>
+<p>A <strong>tick</strong> is one step of the game's clock. Every combatant has a <strong>gauge</strong>, which is just a number. On every tick, each gauge goes up by that combatant's speed, and when a gauge reaches the maximum, that combatant may act and the gauge drops back down.</p>
+<p>That is the whole ATB (Active Time Battle) bar. The coloured bar on screen is only a picture of one integer.</p>
+
+<h2>2. What FF5 actually does (verified)</h2>
+<ul>
+  <li>Time keeps flowing for both you and the enemies, and each character has a visible bar that fills according to speed. <a href="https://en.wikipedia.org/wiki/Final_Fantasy_V">Wikipedia: Final Fantasy V</a></li>
+  <li>Haste makes a bar fill in half the time, so think "speed &times; 2". <a href="https://finalfantasy.fandom.com/wiki/Haste_(Final_Fantasy_V_status)">FF Wiki: Haste (FFV)</a></li>
+  <li>Equipment weight reduces agility, which slows the bar. <a href="https://finalfantasy.fandom.com/wiki/Magic_(Final_Fantasy_V)">FF Wiki: FFV stats</a></li>
+</ul>
+<p class="note">The exact internal numbers FF5 uses were not checked for this lesson. Everything below is a simplified model that behaves the same way, which is exactly what you need for your own game.</p>
+
+<h2>3. Play with it</h2>
+<p>Each tick, every gauge gains its speed. Reaching 100 means ready. Try making Faris much faster than Lenna, then turn Haste on.</p>
+<div class="demo">
+  <div id="rows"></div>
+  <div class="ctl">
+    <button id="go">Start</button>
+    <button id="reset">Reset</button>
+    <span>Tick: <strong id="tickNo">0</strong></span>
+  </div>
+</div>
+
+<h2>4. The same thing in C</h2>
+<p class="note">Save as <code>ticks.c</code>, then build and run with <code>gcc -std=c99 -Wall ticks.c -o ticks &amp;&amp; ./ticks</code></p>
+<pre><code>#include &lt;stdio.h&gt;
+
+#define GAUGE_MAX 100
+
+typedef struct {
+    const char *name;
+    int speed;
+    int gauge;
+} Combatant;
+
+void tick(Combatant *c) {
+    c-&gt;gauge += c-&gt;speed;      /* one tick of time passes */
+}
+
+int main(void) {
+    Combatant party[3] = {
+        {"Bartz", 8, 0},
+        {"Lenna", 6, 0},
+        {"Faris", 10, 0}
+    };
+
+    for (int t = 1; t &lt;= 40; t++) {
+        for (int i = 0; i &lt; 3; i++) {
+            tick(&amp;party[i]);
+            if (party[i].gauge &gt;= GAUGE_MAX) {
+                printf("tick %2d: %s is ready!\n", t, party[i].name);
+                party[i].gauge -= GAUGE_MAX;
+            }
+        }
+    }
+    return 0;
+}</code></pre>
+
+<p>Three things to notice:</p>
+<ul>
+  <li><code>struct</code> bundles one fighter's data in one place, so adding a field like <code>hp</code> later is easy.</li>
+  <li><code>tick(&amp;party[i])</code> passes the <em>address</em> of the fighter. Inside, <code>c-&gt;gauge</code> means "the gauge of the struct that <code>c</code> points to". Without the pointer, C would hand <code>tick</code> a copy and your change would vanish.</li>
+  <li><code>gauge -= GAUGE_MAX</code> instead of <code>gauge = 0</code> keeps any overflow. Bartz hits 104 on tick 13 and restarts at 4, which keeps his timing fair over a long fight.</li>
+</ul>
+
+<h2>5. Check yourself</h2>
+<p class="note">Try to answer before looking back up. Struggling a little is what makes it stick.</p>
+<div id="quiz"></div>
+
+<h2>6. Keep going</h2>
+<p><strong>Primary source to read next:</strong> the <a href="https://en.wikipedia.org/wiki/Final_Fantasy_V">Final Fantasy V article</a> for how ATB fits into the game's design. For deeper mechanics, the speedrun community's <a href="https://kb.speeddemosarchive.com/Final_Fantasy_V/Techniques">FFV techniques page</a> links to an algorithms FAQ, which I have not read yet.</p>
+<p><strong>Your teacher is a chat away.</strong> If any line of the C code or the pointer idea is unclear, ask me and we'll slow down.</p>
+<p><strong>Next lesson idea:</strong> let the player pick an action when a gauge fills, so the loop has to pause for input.</p>
+
+<script>
+/* ---------- demo ---------- */
+const MAX = 100;
+const start = [
+  {name:"Bartz", speed:8,  haste:false},
+  {name:"Lenna", speed:6,  haste:false},
+  {name:"Faris", speed:10, haste:false}
+];
+let state, timer = null, t = 0;
+
+function build() {
+  state = start.map(s => ({...s, gauge:0, ready:0}));
+  t = 0;
+  document.getElementById("tickNo").textContent = 0;
+  const rows = document.getElementById("rows");
+  rows.innerHTML = "";
+  state.forEach((c, i) => {
+    const r = document.createElement("div");
+    r.className = "row";
+    r.innerHTML = `
+      <div>${c.name}</div>
+      <div><div class="bar"><div class="fill" id="f${i}"></div></div>
+        <div class="ctl">
+          <label>Speed <input type="range" min="1" max="20" value="${c.speed}" id="s${i}"> <span id="sv${i}">${c.speed}</span></label>
+          <label><input type="checkbox" id="h${i}"> Haste</label>
+        </div></div>
+      <div id="r${i}">ready: 0</div>`;
+    rows.appendChild(r);
+    document.getElementById("s"+i).oninput = e => {
+      c.speed = +e.target.value;
+      document.getElementById("sv"+i).textContent = c.speed;
+    };
+    document.getElementById("h"+i).onchange = e => { c.haste = e.target.checked; };
+  });
+}
+
+function step() {
+  t++;
+  document.getElementById("tickNo").textContent = t;
+  state.forEach((c, i) => {
+    const f = document.getElementById("f"+i);
+    c.gauge += c.speed * (c.haste ? 2 : 1);
+    if (c.gauge >= MAX) {
+      c.ready++;
+      c.gauge -= MAX;
+      document.getElementById("r"+i).textContent = "ready: " + c.ready;
+      /* hold the bar full and red briefly, then drop to the leftover */
+      f.classList.add("ready");
+      f.style.width = "100%";
+      setTimeout(() => {
+        f.classList.remove("ready");
+        f.style.width = Math.min(c.gauge, MAX) + "%";
+      }, 90);
+    } else {
+      f.style.width = c.gauge + "%";
+    }
+  });
+}
+
+document.getElementById("go").onclick = e => {
+  if (timer) { clearInterval(timer); timer = null; e.target.textContent = "Start"; }
+  else { timer = setInterval(step, 120); e.target.textContent = "Pause"; }
+};
+document.getElementById("reset").onclick = () => {
+  clearInterval(timer); timer = null;
+  document.getElementById("go").textContent = "Start";
+  build();
+};
+build();
+
+/* ---------- quiz (answers deliberately the same length) ---------- */
+const questions = [
+  { q:"Faris has speed 10 and the max is 100. On which tick does he first become ready?",
+    a:["Tick 11 exactly","Tick 12 exactly","Tick 10 exactly","Tick 15 exactly"], right:2,
+    why:"10 per tick means 10, 20, ... 100 on tick 10." },
+  { q:"Lenna has speed 6 and Haste doubles her fill rate. On which tick is she first ready?",
+    a:["Tick 9 exactly","Tick 8 exactly","Tick 7 exactly","Tick 6 exactly"], right:0,
+    why:"Hasted she gains 12 per tick. 12 x 8 = 96 is not enough, 12 x 9 = 108 is." },
+  { q:"Why does tick() take a Combatant pointer instead of a Combatant?",
+    a:["It shrinks the struct to save some memory","It stops the gauge value from ever overflowing",
+       "It lets the loop skip the speed field","It edits the real struct, not a copy"], right:3,
+    why:"Passing by value gives the function a copy, so the real gauge would never change." }
+];
+const quiz = document.getElementById("quiz");
+questions.forEach((item, qi) => {
+  const d = document.createElement("div"); d.className = "q";
+  d.innerHTML = `<div><strong>${qi+1}.</strong> ${item.q}</div>`;
+  const fb = document.createElement("div"); fb.className = "fb";
+  item.a.forEach((txt, ai) => {
+    const b = document.createElement("button"); b.textContent = txt;
+    b.onclick = () => {
+      if (ai === item.right) {
+        b.className = "right"; fb.textContent = "Correct. " + item.why;
+      } else {
+        b.className = "wrong"; fb.textContent = "Not quite, try again.";
+      }
+    };
+    d.appendChild(b);
+  });
+  d.appendChild(fb); quiz.appendChild(d);
+});
+</script>
+</body>
+</html>
